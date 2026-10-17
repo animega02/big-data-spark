@@ -1,0 +1,41 @@
+{
+  "data_inizio": "2015-01-01",
+  "data_fine": "2015-04-09",
+  "tipo_crimine": "ROBBERY",
+  "distretto": "Tutti",
+  "arresto": "Tutti",
+  "area_disegnata": {
+    "type": "Feature",
+    "properties": {},
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [
+            -87.668242,
+            41.856777
+          ],
+          [
+            -87.668242,
+            41.893077
+          ],
+          [
+            -87.637352,
+            41.893077
+          ],
+          [
+            -87.637352,
+            41.856777
+          ],
+          [
+            -87.668242,
+            41.856777
+          ]
+        ]
+      ]
+    },
+    "id": "0"
+  },
+  "area_filtro_attiva": true,
+  "filtri_applicati": true
+}
