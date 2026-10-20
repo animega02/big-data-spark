@@ -10,6 +10,13 @@ from dati import carica_dataset
 from filtri_crimini import applica_filtri_globali
 from stato_app import inizializza_stato
 
+from componenti_filtri import mostra_filtri_globali
+
+from ui import (
+    mostra_header_pagina,
+    mostra_chip_filtri
+)
+
 
 # =========================================================
 # CONFIGURAZIONE
@@ -99,106 +106,61 @@ def cerca_crimini_mappa(area=None):
 # =========================================================
 # TITOLO
 # =========================================================
+# =========================================================
+# HEADER PAGINA
+# =========================================================
 
-st.title("🗺️ Esplora i crimini di Chicago")
-
-st.caption(
-    "Esplora geograficamente gli eventi corrispondenti "
-    "ai filtri globali dell'applicazione."
+mostra_header_pagina(
+    "Spatial Intelligence",
+    "Crime Map",
+    "Esplora la distribuzione geografica degli eventi criminali "
+    "e seleziona aree personalizzate sulla mappa."
 )
 
 
 # =========================================================
-# PANNELLO FILTRI
+# TOOLBAR SUPERIORE
 # =========================================================
 
-mostra_filtri_globali()
-
-
-# =========================================================
-# FILTRI ATTIVI
-# =========================================================
-
-st.subheader("Filtri attivi")
-
-
-col1, col2, col3, col4 = st.columns(4)
-
-
-col1.metric(
-    "Dal",
-    st.session_state.data_inizio.strftime(
-        "%d/%m/%Y"
-    )
+col_filtri_attivi, col_pannello_filtri = st.columns(
+    [5, 1.3],
+    vertical_alignment="center"
 )
 
 
-col2.metric(
-    "Al",
-    st.session_state.data_fine.strftime(
-        "%d/%m/%Y"
-    )
+with col_filtri_attivi:
+
+    mostra_chip_filtri()
+
+
+with col_pannello_filtri:
+
+    mostra_filtri_globali()
+
+
+# =========================================================
+# AZIONI MAPPA
+# =========================================================
+
+st.markdown(
+    """
+    <div class="crime-section-label">
+        Map controls
+    </div>
+    """,
+    unsafe_allow_html=True
 )
-
-
-col3.metric(
-    "Tipo",
-    st.session_state.tipo_crimine
-)
-
-
-col4.metric(
-    "Arresto",
-    st.session_state.arresto
-)
-
-
-# =========================================================
-# FILTRI AGGIUNTIVI
-# =========================================================
-
-informazioni_extra = []
-
-
-if st.session_state.distretto != "Tutti":
-
-    informazioni_extra.append(
-        f"📍 Distretto {st.session_state.distretto}"
-    )
-
-
-if st.session_state.area_filtro_attiva:
-
-    informazioni_extra.append(
-        "📐 Area geografica attiva"
-    )
-
-
-if informazioni_extra:
-
-    st.caption(
-        " • ".join(
-            informazioni_extra
-        )
-    )
-
-
-# =========================================================
-# PULSANTI
-# =========================================================
-
-st.divider()
 
 
 col_cerca, col_area, col_pulisci = st.columns(
-    [2, 2, 1]
+    [2.2, 2.2, 1]
 )
 
 
 with col_cerca:
 
     cerca = st.button(
-        "🔍 Cerca crimini",
+        "Cerca crimini",
         type="primary",
         use_container_width=True
     )
@@ -207,7 +169,7 @@ with col_cerca:
 with col_area:
 
     cerca_area = st.button(
-        "📐 Cerca nell'area selezionata",
+        "Cerca nell'area selezionata",
         use_container_width=True,
 
         disabled=(
@@ -220,10 +182,9 @@ with col_area:
 with col_pulisci:
 
     pulisci = st.button(
-        "🧹 Pulisci",
+        "Pulisci",
         use_container_width=True
     )
-
 
 # =========================================================
 # RICERCA GENERALE

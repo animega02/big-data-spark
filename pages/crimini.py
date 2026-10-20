@@ -7,10 +7,15 @@ from pyspark.sql.functions import (
     lower
 )
 
+from componenti_filtri import mostra_filtri_globali
 from dati import carica_dataset
 from filtri_crimini import applica_filtri_globali
 from stato_app import inizializza_stato
-from componenti_filtri import mostra_filtri_globali
+
+from ui import (
+    mostra_header_pagina,
+    mostra_chip_filtri
+)
 
 
 # =========================================================
@@ -19,132 +24,128 @@ from componenti_filtri import mostra_filtri_globali
 
 inizializza_stato()
 
+
 if "cache_crimini_versione" not in st.session_state:
     st.session_state.cache_crimini_versione = None
+
 
 if "cache_crimini_dati" not in st.session_state:
     st.session_state.cache_crimini_dati = None
 
+
 if "cache_crimini_totale" not in st.session_state:
     st.session_state.cache_crimini_totale = None
 
+
+if "cache_crimini_chiave" not in st.session_state:
+    st.session_state.cache_crimini_chiave = None
+
+
 # =========================================================
-# TITOLO
+# HEADER
 # =========================================================
 
-st.title("📋 Crimini")
-
-mostra_filtri_globali()
-
-st.caption(
-    "Eventi corrispondenti all'ultima ricerca "
-    "eseguita nella pagina Mappa."
+mostra_header_pagina(
+    "▤ Crime Intelligence",
+    "Records",
+    "Consulta i singoli eventi criminali corrispondenti "
+    "ai filtri globali e cerca direttamente nel dataset."
 )
 
 
 # =========================================================
-# NESSUNA RICERCA ANCORA ESEGUITA
+# TOOLBAR
+# =========================================================
+
+col_filtri_attivi, col_filtri = st.columns(
+    [5, 1.3],
+    vertical_alignment="center"
+)
+
+
+with col_filtri_attivi:
+
+    mostra_chip_filtri()
+
+
+with col_filtri:
+
+    mostra_filtri_globali()
+
+
+# =========================================================
+# CONTROLLO FILTRI
 # =========================================================
 
 if not st.session_state.filtri_applicati:
 
     st.info(
-        "Esegui prima una ricerca nella pagina 🗺️ Mappa. "
-        "I risultati compariranno automaticamente qui."
+        "Imposta i filtri tramite il pannello ⚙ Filtri "
+        "oppure esegui una ricerca dalla Crime Map."
     )
 
     st.stop()
 
 
 # =========================================================
-# FILTRI ATTIVI
-# =========================================================
-
-st.subheader("Filtri attivi")
-
-col1, col2, col3, col4 = st.columns(4)
-
-
-col1.metric(
-    "Dal",
-    st.session_state.data_inizio.strftime(
-        "%d/%m/%Y"
-    )
-)
-
-
-col2.metric(
-    "Al",
-    st.session_state.data_fine.strftime(
-        "%d/%m/%Y"
-    )
-)
-
-
-col3.metric(
-    "Tipo",
-    st.session_state.tipo_crimine
-)
-
-
-col4.metric(
-    "Arresto",
-    st.session_state.arresto
-)
-
-
-if st.session_state.distretto != "Tutti":
-
-    st.caption(
-        f"📍 Distretto: "
-        f"{st.session_state.distretto}"
-    )
-
-
-if st.session_state.area_filtro_attiva:
-
-    st.info(
-        "📐 Filtro geografico attivo: "
-        "sono mostrati soltanto i crimini "
-        "all'interno dell'area selezionata sulla Mappa."
-    )
-
-
-# =========================================================
-# OPZIONI DELLA LISTA
+# SEARCH RECORDS
 # =========================================================
 
 st.divider()
 
-col_ricerca, col_limite = st.columns(
-    [3, 1]
+
+st.markdown(
+    '<div class="crime-section-label">'
+    '⌕ Search Records'
+    '</div>',
+    unsafe_allow_html=True
 )
 
 
-with col_ricerca:
+st.markdown(
+    "## Cerca nel dataset"
+)
 
-    ricerca_testuale = st.text_input(
-        "🔎 Cerca nei risultati",
 
-        placeholder=(
-            "Tipo, descrizione, luogo o indirizzo..."
-        )
+with st.container(
+    border=True
+):
+
+    col_ricerca, col_limite = st.columns(
+        [3, 1]
     )
 
 
-with col_limite:
+    with col_ricerca:
 
-    limite = st.selectbox(
-        "Risultati da mostrare",
+        ricerca_testuale = st.text_input(
+            "Ricerca testuale",
 
-        [
-            50,
-            100,
-            250,
-            500
-        ],
+            placeholder=(
+                "Tipo, descrizione, luogo o indirizzo..."
+            )
+        )
 
-        index=1
+
+    with col_limite:
+
+        limite = st.selectbox(
+            "Record da mostrare",
+
+            [
+                50,
+                100,
+                250,
+                500
+            ],
+
+            index=1
+        )
+
+
+    st.caption(
+        "La ricerca viene eseguita su tipo di crimine, "
+        "descrizione, luogo e indirizzo."
     )
 
 
@@ -156,10 +157,11 @@ crimini = carica_dataset()
 
 
 # =========================================================
-# AREA ATTIVA
+# AREA GEOGRAFICA ATTIVA
 # =========================================================
 
 area_attiva = None
+
 
 if (
     st.session_state.area_filtro_attiva
@@ -173,51 +175,56 @@ if (
 
 
 # =========================================================
-# QUERY AUTOMATICA
-# =========================================================
-# =========================================================
-# CONTROLLO CACHE
+# CHIAVE VISUALIZZAZIONE
 # =========================================================
 
-deve_ricaricare = (
-    st.session_state.cache_crimini_versione
-    != st.session_state.versione_filtri
-)
-
-
-# Anche una ricerca testuale richiede una nuova interrogazione
-# perché è un filtro locale della pagina Crimini.
-if ricerca_testuale.strip():
-    deve_ricaricare = True
-
-
-# Se cambia il numero di record visualizzati dobbiamo
-# rigenerare almeno la lista mostrata.
 chiave_visualizzazione = (
     st.session_state.versione_filtri,
     ricerca_testuale.strip().lower(),
     limite
 )
 
-if "cache_crimini_chiave" not in st.session_state:
-    st.session_state.cache_crimini_chiave = None
 
-if (
+# =========================================================
+# CONTROLLO CACHE
+# =========================================================
+
+deve_ricaricare = (
+    st.session_state.cache_crimini_versione
+    !=
+    st.session_state.versione_filtri
+
+    or
+
     st.session_state.cache_crimini_chiave
-    != chiave_visualizzazione
-):
-    deve_ricaricare = True
+    !=
+    chiave_visualizzazione
+
+    or
+
+    st.session_state.cache_crimini_dati
+    is None
+
+    or
+
+    st.session_state.cache_crimini_totale
+    is None
+)
 
 
 # =========================================================
-# QUERY SPARK SOLO SE NECESSARIA
+# QUERY SPARK
 # =========================================================
 
 if deve_ricaricare:
 
     with st.spinner(
-        "Caricamento dei crimini..."
+        "Caricamento degli eventi..."
     ):
+
+        # =================================================
+        # FILTRI GLOBALI
+        # =================================================
 
         risultato = applica_filtri_globali(
             crimini,
@@ -230,9 +237,9 @@ if deve_ricaricare:
         )
 
 
-        # -------------------------------------------------
+        # =================================================
         # RICERCA TESTUALE
-        # -------------------------------------------------
+        # =================================================
 
         if ricerca_testuale.strip():
 
@@ -242,6 +249,7 @@ if deve_ricaricare:
                 .lower()
             )
 
+
             campo_ricerca = concat_ws(
                 " ",
                 col("Primary Type"),
@@ -249,6 +257,7 @@ if deve_ricaricare:
                 col("Location Description"),
                 col("Block")
             )
+
 
             risultato = risultato.filter(
                 lower(
@@ -259,22 +268,24 @@ if deve_ricaricare:
             )
 
 
-        # -------------------------------------------------
-        # CONTEGGIO
-        # -------------------------------------------------
+        # =================================================
+        # NUMERO TOTALE RISULTATI
+        # =================================================
 
         totale = risultato.count()
 
 
-        # -------------------------------------------------
-        # RECORD
-        # -------------------------------------------------
+        # =================================================
+        # RECORD DA VISUALIZZARE
+        # =================================================
 
         risultato_visualizzato = (
             risultato
 
             .orderBy(
-                desc("_data_timestamp")
+                desc(
+                    "_data_timestamp"
+                )
             )
 
             .select(
@@ -294,12 +305,15 @@ if deve_ricaricare:
         )
 
 
-        dati = risultato_visualizzato.toPandas()
+        dati = (
+            risultato_visualizzato
+            .toPandas()
+        )
 
 
-        # -------------------------------------------------
+        # =================================================
         # NOMI COLONNE
-        # -------------------------------------------------
+        # =================================================
 
         dati = dati.rename(
             columns={
@@ -315,38 +329,52 @@ if deve_ricaricare:
         )
 
 
-        # -------------------------------------------------
+        # =================================================
         # BOOLEANI
-        # -------------------------------------------------
+        # =================================================
 
         if not dati.empty:
 
-            dati["Arresto"] = dati["Arresto"].map(
-                {
-                    True: "Sì",
-                    False: "No"
-                }
-            )
-
-            dati["Domestico"] = dati["Domestico"].map(
-                {
-                    True: "Sì",
-                    False: "No"
-                }
+            dati["Arresto"] = (
+                dati["Arresto"]
+                .map(
+                    {
+                        True: "Sì",
+                        False: "No"
+                    }
+                )
             )
 
 
-        # -------------------------------------------------
-        # SALVA CACHE
-        # -------------------------------------------------
+            dati["Domestico"] = (
+                dati["Domestico"]
+                .map(
+                    {
+                        True: "Sì",
+                        False: "No"
+                    }
+                )
+            )
 
-        st.session_state.cache_crimini_dati = dati
 
-        st.session_state.cache_crimini_totale = totale
+        # =================================================
+        # CACHE
+        # =================================================
+
+        st.session_state.cache_crimini_dati = (
+            dati
+        )
+
+
+        st.session_state.cache_crimini_totale = (
+            totale
+        )
+
 
         st.session_state.cache_crimini_versione = (
             st.session_state.versione_filtri
         )
+
 
         st.session_state.cache_crimini_chiave = (
             chiave_visualizzazione
@@ -355,87 +383,87 @@ if deve_ricaricare:
 
 else:
 
-    dati = st.session_state.cache_crimini_dati
-
-    totale = st.session_state.cache_crimini_totale
-
-
-# =========================================================
-# NOMI COLONNE
-# =========================================================
-
-dati = dati.rename(
-    columns={
-        "Date": "Data",
-        "Primary Type": "Tipo",
-        "Description": "Descrizione",
-        "Location Description": "Luogo",
-        "Block": "Indirizzo",
-        "District": "Distretto",
-        "Arrest": "Arresto",
-        "Domestic": "Domestico"
-    }
-)
-
-
-# =========================================================
-# BOOLEANI
-# =========================================================
-
-if not dati.empty:
-
-    dati["Arresto"] = dati["Arresto"].map(
-        {
-            True: "Sì",
-            False: "No"
-        }
+    dati = (
+        st.session_state.cache_crimini_dati
     )
 
-    dati["Domestico"] = dati["Domestico"].map(
-        {
-            True: "Sì",
-            False: "No"
-        }
+
+    totale = (
+        st.session_state.cache_crimini_totale
     )
 
 
 # =========================================================
-# METRICHE
+# RISULTATI
 # =========================================================
 
 st.divider()
 
+
+st.markdown(
+    '<div class="crime-section-label">'
+    '◈ Results'
+    '</div>',
+    unsafe_allow_html=True
+)
+
+
+st.markdown(
+    "## Risultati"
+)
+
+
+# =========================================================
+# KPI
+# =========================================================
+
 col1, col2 = st.columns(2)
 
 
-col1.metric(
-    "Crimini trovati",
-    f"{totale:,}"
-)
+with col1:
+
+    st.metric(
+        "Eventi corrispondenti",
+        f"{totale:,}"
+    )
 
 
-col2.metric(
-    "Record visualizzati",
-    f"{len(dati):,}"
-)
+with col2:
+
+    st.metric(
+        "Record visualizzati",
+        f"{len(dati):,}"
+    )
 
 
 # =========================================================
-# TABELLA
+# RECORD
 # =========================================================
 
-st.subheader("Eventi")
+st.markdown(
+    "### ▤ Crime Records"
+)
 
 
 if dati.empty:
 
     st.warning(
-        "Nessun crimine trovato "
-        "con i filtri attualmente applicati."
+        "Nessun evento trovato con i filtri "
+        "attualmente applicati."
     )
 
 
 else:
+
+    st.caption(
+        f"Visualizzazione di {len(dati):,} record "
+        f"su {totale:,} eventi corrispondenti."
+    )
+
+
+    # =====================================================
+    # TABELLA
+    # =====================================================
 
     st.dataframe(
         dati,
@@ -444,29 +472,99 @@ else:
 
         hide_index=True,
 
-        height=600
+        height=600,
+
+        column_config={
+
+            "Data":
+                st.column_config.TextColumn(
+                    "Data",
+                    width="medium"
+                ),
+
+            "Tipo":
+                st.column_config.TextColumn(
+                    "Tipo",
+                    width="medium"
+                ),
+
+            "Descrizione":
+                st.column_config.TextColumn(
+                    "Descrizione",
+                    width="large"
+                ),
+
+            "Luogo":
+                st.column_config.TextColumn(
+                    "Luogo",
+                    width="large"
+                ),
+
+            "Indirizzo":
+                st.column_config.TextColumn(
+                    "Indirizzo",
+                    width="medium"
+                ),
+
+            "Distretto":
+                st.column_config.NumberColumn(
+                    "Distretto",
+                    format="%d"
+                ),
+
+            "Arresto":
+                st.column_config.TextColumn(
+                    "Arresto",
+                    width="small"
+                ),
+
+            "Domestico":
+                st.column_config.TextColumn(
+                    "Domestico",
+                    width="small"
+                )
+        }
     )
 
 
     # =====================================================
-    # DOWNLOAD CSV
+    # EXPORT
     # =====================================================
 
-    csv = dati.to_csv(
-        index=False
-    ).encode(
-        "utf-8"
+    st.markdown(
+        '<div class="crime-section-label">'
+        '↓ Export'
+        '</div>',
+        unsafe_allow_html=True
     )
 
 
-    st.download_button(
-        "⬇️ Esporta i record visualizzati in CSV",
-
-        data=csv,
-
-        file_name="chicago_crimes.csv",
-
-        mime="text/csv",
-
-        use_container_width=True
+    csv = (
+        dati
+        .to_csv(
+            index=False
+        )
+        .encode(
+            "utf-8"
+        )
     )
+
+
+    col_spazio, col_download = st.columns(
+        [3, 1]
+    )
+
+
+    with col_download:
+
+        st.download_button(
+            "↓ Esporta CSV",
+
+            data=csv,
+
+            file_name="chicago_crimes.csv",
+
+            mime="text/csv",
+
+            use_container_width=True
+        )

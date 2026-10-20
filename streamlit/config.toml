@@ -1,0 +1,41 @@
+[theme]
+base = "dark"
+
+primaryColor = "#38BDF8"
+backgroundColor = "#080B12"
+secondaryBackgroundColor = "#141C2A"
+textColor = "#F8FAFC"
+
+borderColor = "#475569"
+
+dataframeHeaderBackgroundColor = "#182233"
+dataframeHeaderTextColor = "#F8FAFC"
+dataframeBorderColor = "#223047"
+
+
+[theme.light]
+
+primaryColor = "#38BDF8"
+backgroundColor = "#080B12"
+secondaryBackgroundColor = "#141C2A"
+textColor = "#F8FAFC"
+
+borderColor = "#475569"
+
+dataframeHeaderBackgroundColor = "#182233"
+dataframeHeaderTextColor = "#F8FAFC"
+dataframeBorderColor = "#223047"
+
+
+[theme.dark]
+
+primaryColor = "#38BDF8"
+backgroundColor = "#080B12"
+secondaryBackgroundColor = "#141C2A"
+textColor = "#F8FAFC"
+
+borderColor = "#475569"
+
+dataframeHeaderBackgroundColor = "#182233"
+dataframeHeaderTextColor = "#F8FAFC"
+dataframeBorderColor = "#223047"

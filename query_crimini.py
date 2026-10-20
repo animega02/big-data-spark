@@ -1,4 +1,18 @@
-from pyspark.sql.functions import desc, to_timestamp, month
+from pyspark.sql.functions import (
+    col,
+    count,
+    countDistinct,
+    date_format,
+    dayofweek,
+    desc,
+    hour,
+    month,
+    sum as spark_sum,
+    to_date,
+    to_timestamp,
+    when,
+    year
+)
 
 
 # =========================================================
@@ -139,101 +153,451 @@ def coordinate_crimini(
 # =========================================================
 # NUOVE QUERY
 # =========================================================
-# Queste ricevono già un DataFrame filtrato da
+#
+# Queste funzioni ricevono un DataFrame già filtrato da
 # applica_filtri_globali().
 #
-# Quindi NON filtrano nuovamente per anno.
-# Sono quelle che useremo nella nuova pagina Analisi.
+# Il loro compito è quindi solo quello di aggregare i dati.
 # =========================================================
 
 
-def top_tipi_crimine(crimini, top_n=10):
+# =========================================================
+# PANORAMICA GENERALE
+# =========================================================
 
-    risultato = (
-        crimini
-        .filter(crimini["Primary Type"].isNotNull())
-        .groupBy("Primary Type")
-        .count()
-        .orderBy(desc("count"))
-        .limit(top_n)
+def statistiche_generali(crimini):
+
+    risultato = crimini.agg(
+
+        count("*").alias(
+            "Totale"
+        ),
+
+        spark_sum(
+            when(
+                col("Arrest") == True,
+                1
+            ).otherwise(0)
+        ).alias(
+            "Arresti"
+        ),
+
+        spark_sum(
+            when(
+                col("Domestic") == True,
+                1
+            ).otherwise(0)
+        ).alias(
+            "Domestici"
+        ),
+
+        countDistinct(
+            "District"
+        ).alias(
+            "Distretti"
+        )
     )
 
     return risultato
 
 
-def top_distretti(crimini, top_n=10):
+# =========================================================
+# TOP TIPI DI CRIMINE
+# =========================================================
+
+def top_tipi_crimine(
+    crimini,
+    top_n=10
+):
 
     risultato = (
         crimini
-        .filter(crimini["District"].isNotNull())
-        .groupBy("District")
+
+        .filter(
+            col("Primary Type").isNotNull()
+        )
+
+        .groupBy(
+            "Primary Type"
+        )
+
         .count()
-        .orderBy(desc("count"))
-        .limit(top_n)
+
+        .orderBy(
+            desc("count")
+        )
+
+        .limit(
+            top_n
+        )
     )
 
     return risultato
 
 
-def distribuzione_arresti(crimini):
+# =========================================================
+# TOP DISTRETTI
+# =========================================================
+
+def top_distretti(
+    crimini,
+    top_n=10
+):
 
     risultato = (
         crimini
-        .filter(crimini["Arrest"].isNotNull())
-        .groupBy("Arrest")
+
+        .filter(
+            col("District").isNotNull()
+        )
+
+        .groupBy(
+            "District"
+        )
+
         .count()
-        .orderBy(desc("count"))
+
+        .orderBy(
+            desc("count")
+        )
+
+        .limit(
+            top_n
+        )
     )
 
     return risultato
 
 
-def top_luoghi(crimini, top_n=10):
+# =========================================================
+# DISTRIBUZIONE ARRESTI
+# =========================================================
+
+def distribuzione_arresti(
+    crimini
+):
 
     risultato = (
         crimini
-        .filter(crimini["Location Description"].isNotNull())
-        .groupBy("Location Description")
+
+        .filter(
+            col("Arrest").isNotNull()
+        )
+
+        .groupBy(
+            "Arrest"
+        )
+
         .count()
-        .orderBy(desc("count"))
-        .limit(top_n)
+
+        .orderBy(
+            desc("count")
+        )
     )
 
     return risultato
 
 
-def andamento_annuale(crimini):
+# =========================================================
+# TOP LUOGHI
+# =========================================================
+
+def top_luoghi(
+    crimini,
+    top_n=10
+):
 
     risultato = (
         crimini
-        .filter(crimini["Year"].isNotNull())
-        .groupBy("Year")
+
+        .filter(
+            col("Location Description").isNotNull()
+        )
+
+        .groupBy(
+            "Location Description"
+        )
+
         .count()
-        .orderBy("Year")
+
+        .orderBy(
+            desc("count")
+        )
+
+        .limit(
+            top_n
+        )
     )
 
     return risultato
 
 
-def andamento_mensile(crimini):
+# =========================================================
+# ANDAMENTO TEMPORALE
+# =========================================================
 
-    risultato = (
-        crimini
-        .withColumn(
-            "_data_analisi",
-            to_timestamp(
-                "Date",
-                "MM/dd/yyyy hh:mm:ss a"
+def andamento_temporale(
+    crimini,
+    granularita="mese"
+):
+
+    risultato = crimini.filter(
+        col("_data_timestamp").isNotNull()
+    )
+
+
+    # -----------------------------------------------------
+    # GIORNO
+    # -----------------------------------------------------
+
+    if granularita == "giorno":
+
+        risultato = (
+            risultato
+
+            .withColumn(
+                "Periodo",
+                to_date(
+                    col("_data_timestamp")
+                )
+            )
+
+            .groupBy(
+                "Periodo"
+            )
+
+            .count()
+
+            .orderBy(
+                "Periodo"
             )
         )
-        .withColumn(
-            "Mese",
-            month("_data_analisi")
+
+
+    # -----------------------------------------------------
+    # ANNO
+    # -----------------------------------------------------
+
+    elif granularita == "anno":
+
+        risultato = (
+            risultato
+
+            .withColumn(
+                "Periodo",
+                year(
+                    col("_data_timestamp")
+                )
+            )
+
+            .groupBy(
+                "Periodo"
+            )
+
+            .count()
+
+            .orderBy(
+                "Periodo"
+            )
         )
-        .filter(crimini["Date"].isNotNull())
-        .groupBy("Mese")
+
+
+    # -----------------------------------------------------
+    # MESE
+    # -----------------------------------------------------
+
+    else:
+
+        risultato = (
+            risultato
+
+            .withColumn(
+                "Periodo",
+                date_format(
+                    col("_data_timestamp"),
+                    "yyyy-MM"
+                )
+            )
+
+            .groupBy(
+                "Periodo"
+            )
+
+            .count()
+
+            .orderBy(
+                "Periodo"
+            )
+        )
+
+
+    return risultato
+
+
+# =========================================================
+# GIORNO DELLA SETTIMANA
+# =========================================================
+
+def crimini_per_giorno_settimana(
+    crimini
+):
+
+    risultato = (
+        crimini
+
+        .filter(
+            col("_data_timestamp").isNotNull()
+        )
+
+        .withColumn(
+            "GiornoNumero",
+            dayofweek(
+                col("_data_timestamp")
+            )
+        )
+
+        # Spark:
+        # 1 = domenica
+        # 2 = lunedì
+        # ...
+        # 7 = sabato
+        #
+        # Creiamo quindi un ordine più naturale:
+        # lunedì -> domenica.
+
+        .withColumn(
+            "Ordine",
+
+            when(
+                col("GiornoNumero") == 2,
+                1
+            )
+
+            .when(
+                col("GiornoNumero") == 3,
+                2
+            )
+
+            .when(
+                col("GiornoNumero") == 4,
+                3
+            )
+
+            .when(
+                col("GiornoNumero") == 5,
+                4
+            )
+
+            .when(
+                col("GiornoNumero") == 6,
+                5
+            )
+
+            .when(
+                col("GiornoNumero") == 7,
+                6
+            )
+
+            .otherwise(7)
+        )
+
+        .groupBy(
+            "GiornoNumero",
+            "Ordine"
+        )
+
         .count()
-        .orderBy("Mese")
+
+        .orderBy(
+            "Ordine"
+        )
+    )
+
+    return risultato
+
+
+# =========================================================
+# FASCIA ORARIA
+# =========================================================
+
+def crimini_per_fascia_oraria(
+    crimini
+):
+
+    risultato = (
+        crimini
+
+        .filter(
+            col("_data_timestamp").isNotNull()
+        )
+
+        .withColumn(
+            "Ora",
+            hour(
+                col("_data_timestamp")
+            )
+        )
+
+        .withColumn(
+            "Fascia",
+
+            when(
+                (col("Ora") >= 0)
+                &
+                (col("Ora") < 6),
+                "00:00 - 05:59"
+            )
+
+            .when(
+                (col("Ora") >= 6)
+                &
+                (col("Ora") < 12),
+                "06:00 - 11:59"
+            )
+
+            .when(
+                (col("Ora") >= 12)
+                &
+                (col("Ora") < 18),
+                "12:00 - 17:59"
+            )
+
+            .otherwise(
+                "18:00 - 23:59"
+            )
+        )
+
+        .withColumn(
+            "Ordine",
+
+            when(
+                col("Ora") < 6,
+                1
+            )
+
+            .when(
+                col("Ora") < 12,
+                2
+            )
+
+            .when(
+                col("Ora") < 18,
+                3
+            )
+
+            .otherwise(4)
+        )
+
+        .groupBy(
+            "Fascia",
+            "Ordine"
+        )
+
+        .count()
+
+        .orderBy(
+            "Ordine"
+        )
     )
 
     return risultato

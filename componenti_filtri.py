@@ -285,6 +285,9 @@ def mostra_filtri_globali():
 
             st.session_state.cache_analisi_grafico = None
 
+            st.session_state.cache_panoramica_versione = None
+            st.session_state.cache_panoramica_dati = None
+
 
             # ---------------------------------------------
             # INVALIDAZIONE MAPPA

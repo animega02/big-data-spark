@@ -1,18 +1,25 @@
 import altair as alt
 import streamlit as st
 
+from componenti_filtri import mostra_filtri_globali
 from dati import carica_dataset
 from filtri_crimini import applica_filtri_globali
 from stato_app import inizializza_stato
-from componenti_filtri import mostra_filtri_globali
+from ui import (
+    mostra_header_pagina,
+    mostra_chip_filtri,
+    applica_stile_grafico
+)
 
 from query_crimini import (
+    statistiche_generali,
     top_tipi_crimine,
     top_distretti,
     distribuzione_arresti,
     top_luoghi,
-    andamento_annuale,
-    andamento_mensile
+    andamento_temporale,
+    crimini_per_giorno_settimana,
+    crimini_per_fascia_oraria
 )
 
 
@@ -21,6 +28,17 @@ from query_crimini import (
 # =========================================================
 
 inizializza_stato()
+
+
+# =========================================================
+# CACHE PANORAMICA
+# =========================================================
+
+if "cache_panoramica_versione" not in st.session_state:
+    st.session_state.cache_panoramica_versione = None
+
+if "cache_panoramica_dati" not in st.session_state:
+    st.session_state.cache_panoramica_dati = None
 
 
 # =========================================================
@@ -42,96 +60,349 @@ if "cache_analisi_categoria" not in st.session_state:
 if "cache_analisi_grafico" not in st.session_state:
     st.session_state.cache_analisi_grafico = None
 
+if "cache_analisi_granularita" not in st.session_state:
+    st.session_state.cache_analisi_granularita = None
+
+
+# =========================================================
+# FUNZIONI DI SUPPORTO
+# =========================================================
+
+def ottieni_area_attiva():
+
+    if (
+        st.session_state.area_filtro_attiva
+        and
+        st.session_state.area_disegnata is not None
+    ):
+
+        return st.session_state.area_disegnata
+
+    return None
+
+
+def dataframe_con_filtri_globali():
+
+    crimini = carica_dataset()
+
+    return applica_filtri_globali(
+        crimini,
+        st.session_state.data_inizio,
+        st.session_state.data_fine,
+        st.session_state.tipo_crimine,
+        st.session_state.distretto,
+        st.session_state.arresto,
+        ottieni_area_attiva()
+    )
+
+
+def dataframe_per_analisi(
+    tipo_analisi
+):
+
+    crimini = carica_dataset()
+
+
+    tipo_crimine = (
+        st.session_state.tipo_crimine
+    )
+
+    distretto = (
+        st.session_state.distretto
+    )
+
+    arresto = (
+        st.session_state.arresto
+    )
+
+
+    # =====================================================
+    # FILTRI CONTESTUALI
+    # =====================================================
+    #
+    # Quando analizziamo una certa dimensione,
+    # non ha senso filtrare proprio quella dimensione.
+    #
+    # Esempio:
+    #
+    # Tipo = ROBBERY
+    # Analisi = Tipi più frequenti
+    #
+    # Se mantenessimo il filtro Tipo, otterremmo soltanto
+    # ROBBERY.
+    # =====================================================
+
+    if (
+        tipo_analisi
+        == "Tipi di crimine più frequenti"
+    ):
+
+        tipo_crimine = "Tutti"
+
+
+    elif (
+        tipo_analisi
+        == "Distretti con più crimini"
+    ):
+
+        distretto = "Tutti"
+
+
+    elif (
+        tipo_analisi
+        == "Distribuzione arresti"
+    ):
+
+        arresto = "Tutti"
+
+
+    return applica_filtri_globali(
+        crimini,
+        st.session_state.data_inizio,
+        st.session_state.data_fine,
+        tipo_crimine,
+        distretto,
+        arresto,
+        ottieni_area_attiva()
+    )
+
+
+def determina_granularita():
+
+    giorni = (
+        st.session_state.data_fine
+        -
+        st.session_state.data_inizio
+    ).days + 1
+
+
+    if giorni <= 90:
+        return "giorno"
+
+    elif giorni <= 730:
+        return "mese"
+
+    else:
+        return "anno"
+
 
 # =========================================================
 # TITOLO
 # =========================================================
 
-st.title("📊 Analisi")
+# =========================================================
+# HEADER
+# =========================================================
 
-mostra_filtri_globali()
-
-st.caption(
-    "Interrogazioni aggregate sul dataset Chicago Crimes "
-    "eseguite tramite Apache Spark."
+mostra_header_pagina(
+    "◫ Crime Intelligence",
+    "Analytics",
+    "Esplora pattern, distribuzioni e trend temporali "
+    "degli eventi criminali registrati a Chicago."
 )
 
 
 # =========================================================
-# CONTROLLO RICERCA MAPPA
+# TOOLBAR
+# =========================================================
+
+col_filtri_attivi, col_filtri = st.columns(
+    [5, 1.3],
+    vertical_alignment="center"
+)
+
+
+with col_filtri_attivi:
+
+    mostra_chip_filtri()
+
+
+with col_filtri:
+
+    mostra_filtri_globali()
+
+
+# =========================================================
+# CONTROLLO FILTRI
 # =========================================================
 
 if not st.session_state.filtri_applicati:
 
     st.info(
-        "Esegui prima una ricerca nella pagina 🗺️ Mappa. "
-        "Le analisi utilizzeranno automaticamente gli stessi filtri."
+        "Imposta i filtri desiderati tramite "
+        "il pannello ⚙ Filtri per iniziare l'analisi."
     )
 
     st.stop()
 
+# =========================================================
+# CACHE PANORAMICA
+# =========================================================
+
+if (
+    st.session_state.cache_panoramica_versione
+    !=
+    st.session_state.versione_filtri
+):
+
+    with st.spinner(
+        "Calcolo della panoramica..."
+    ):
+
+        crimini_panoramica = (
+            dataframe_con_filtri_globali()
+        )
+
+        riga = (
+            statistiche_generali(
+                crimini_panoramica
+            )
+            .first()
+        )
+
+
+        if riga is None:
+
+            panoramica = {
+                "Totale": 0,
+                "Arresti": 0,
+                "Domestici": 0,
+                "Distretti": 0
+            }
+
+
+        else:
+
+            panoramica = {
+                "Totale": int(
+                    riga["Totale"] or 0
+                ),
+
+                "Arresti": int(
+                    riga["Arresti"] or 0
+                ),
+
+                "Domestici": int(
+                    riga["Domestici"] or 0
+                ),
+
+                "Distretti": int(
+                    riga["Distretti"] or 0
+                )
+            }
+
+
+        st.session_state.cache_panoramica_dati = (
+            panoramica
+        )
+
+        st.session_state.cache_panoramica_versione = (
+            st.session_state.versione_filtri
+        )
+
+
+panoramica = (
+    st.session_state.cache_panoramica_dati
+)
+
+
+totale = panoramica["Totale"]
+arresti = panoramica["Arresti"]
+domestici = panoramica["Domestici"]
+distretti = panoramica["Distretti"]
+
+
+if totale > 0:
+
+    percentuale_arresti = (
+        arresti
+        /
+        totale
+        *
+        100
+    )
+
+    percentuale_domestici = (
+        domestici
+        /
+        totale
+        *
+        100
+    )
+
+
+else:
+
+    percentuale_arresti = 0
+    percentuale_domestici = 0
+
 
 # =========================================================
-# FILTRI ATTIVI
+# METRICHE PANORAMICA
 # =========================================================
 
-st.subheader("Filtri attivi")
+# =========================================================
+# KPI PANORAMICA
+# =========================================================
+
+st.markdown(
+    """
+    <div class="crime-section-label">
+        ◈ Overview
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+
+st.markdown("## Panoramica")
+
 
 col1, col2, col3, col4 = st.columns(4)
 
 
-col1.metric(
-    "Dal",
-    st.session_state.data_inizio.strftime("%d/%m/%Y")
-)
+with col1:
 
-
-col2.metric(
-    "Al",
-    st.session_state.data_fine.strftime("%d/%m/%Y")
-)
-
-
-col3.metric(
-    "Tipo",
-    st.session_state.tipo_crimine
-)
-
-
-col4.metric(
-    "Arresto",
-    st.session_state.arresto
-)
-
-
-if st.session_state.distretto != "Tutti":
-
-    st.caption(
-        f"📍 Distretto: {st.session_state.distretto}"
+    st.metric(
+        "Eventi totali",
+        f"{totale:,}"
     )
 
 
-if st.session_state.area_filtro_attiva:
+with col2:
 
-    st.info(
-        "📐 Le analisi sono limitate "
-        "all'area geografica selezionata sulla Mappa."
+    st.metric(
+        "Tasso di arresto",
+        f"{percentuale_arresti:.1f}%"
     )
 
 
+with col3:
+
+    st.metric(
+        "Crimini domestici",
+        f"{percentuale_domestici:.1f}%"
+    )
+
+
+with col4:
+
+    st.metric(
+        "Distretti coinvolti",
+        f"{distretti:,}"
+    )
 # =========================================================
 # SELEZIONE ANALISI
 # =========================================================
-
-st.divider()
 
 TIPI_ANALISI = [
     "Tipi di crimine più frequenti",
     "Distretti con più crimini",
     "Distribuzione arresti",
     "Luoghi più frequenti",
-    "Andamento annuale",
-    "Andamento mensile"
+    "Andamento nel tempo",
+    "Crimini per giorno della settimana",
+    "Crimini per fascia oraria"
 ]
 
 
@@ -151,85 +422,189 @@ OPZIONI_TOP = [
 
 
 # =========================================================
-# RECUPERO ULTIMA ANALISI DALLA CACHE
+# RIPRISTINO ULTIMA ANALISI
 # =========================================================
 
 analisi_predefinita = TIPI_ANALISI[0]
 top_predefinito = 10
 
 
-if st.session_state.cache_analisi_chiave is not None:
+if (
+    st.session_state.cache_analisi_chiave
+    is not None
+):
 
-    versione_cache = (
-        st.session_state.cache_analisi_chiave[0]
+    chiave_vecchia = (
+        st.session_state.cache_analisi_chiave
     )
 
-    # Recuperiamo la vecchia selezione solamente se
-    # appartiene ancora agli stessi filtri globali.
+
     if (
-        versione_cache
-        == st.session_state.versione_filtri
+        chiave_vecchia[0]
+        ==
+        st.session_state.versione_filtri
     ):
 
-        analisi_cache = (
-            st.session_state.cache_analisi_chiave[1]
+        analisi_vecchia = (
+            chiave_vecchia[1]
         )
 
-        top_cache = (
-            st.session_state.cache_analisi_chiave[2]
+        top_vecchio = (
+            chiave_vecchia[2]
         )
 
-        if analisi_cache in TIPI_ANALISI:
 
-            analisi_predefinita = analisi_cache
+        if analisi_vecchia in TIPI_ANALISI:
 
-        if top_cache in OPZIONI_TOP:
+            analisi_predefinita = (
+                analisi_vecchia
+            )
 
-            top_predefinito = top_cache
 
+        if top_vecchio in OPZIONI_TOP:
+
+            top_predefinito = (
+                top_vecchio
+            )
 
 # =========================================================
-# WIDGET
+# QUERY LAB
 # =========================================================
 
-col_analisi, col_top = st.columns(
-    [3, 1]
+st.divider()
+
+
+st.markdown(
+    """
+    <div class="crime-section-label">
+        ⌁ Query Lab
+    </div>
+    """,
+    unsafe_allow_html=True
 )
 
 
-with col_analisi:
+st.markdown("## Costruisci l'analisi")
 
-    tipo_analisi = st.selectbox(
-        "Tipo di analisi",
-        TIPI_ANALISI,
-        index=TIPI_ANALISI.index(
-            analisi_predefinita
-        )
+
+with st.container(
+    border=True
+):
+
+    col_analisi, col_top = st.columns(
+        [3, 1]
     )
 
 
-with col_top:
+    with col_analisi:
 
-    top_n = st.selectbox(
-        "Top N",
-        OPZIONI_TOP,
-        index=OPZIONI_TOP.index(
-            top_predefinito
-        ),
-        disabled=(
-            tipo_analisi
-            not in ANALISI_CON_TOP
+        tipo_analisi = st.selectbox(
+            "Tipo di analisi",
+            TIPI_ANALISI,
+            index=TIPI_ANALISI.index(
+                analisi_predefinita
+            )
         )
+
+
+    with col_top:
+
+        top_n = st.selectbox(
+            "Top N",
+            OPZIONI_TOP,
+            index=OPZIONI_TOP.index(
+                top_predefinito
+            ),
+            disabled=(
+                tipo_analisi
+                not in ANALISI_CON_TOP
+            )
+        )
+
+
+    # =====================================================
+    # INFORMAZIONI CONTESTUALI
+    # =====================================================
+
+    if (
+        tipo_analisi
+        ==
+        "Tipi di crimine più frequenti"
+        and
+        st.session_state.tipo_crimine != "Tutti"
+    ):
+
+        st.info(
+            "Per confrontare i diversi tipi di crimine, "
+            "il filtro «Tipo di crimine» viene ignorato "
+            "in questa analisi."
+        )
+
+
+    elif (
+        tipo_analisi
+        ==
+        "Distretti con più crimini"
+        and
+        st.session_state.distretto != "Tutti"
+    ):
+
+        st.info(
+            "Per confrontare i distretti, "
+            "il filtro «Distretto» viene ignorato "
+            "in questa analisi."
+        )
+
+
+    elif (
+        tipo_analisi
+        ==
+        "Distribuzione arresti"
+        and
+        st.session_state.arresto != "Tutti"
+    ):
+
+        st.info(
+            "Per confrontare crimini con e senza arresto, "
+            "il filtro «Arresto» viene ignorato "
+            "in questa analisi."
+        )
+
+
+    # =====================================================
+    # GRANULARITÀ
+    # =====================================================
+
+    granularita = None
+
+
+    if tipo_analisi == "Andamento nel tempo":
+
+        granularita = determina_granularita()
+
+
+        nomi_granularita = {
+            "giorno": "giornaliera",
+            "mese": "mensile",
+            "anno": "annuale"
+        }
+
+
+        st.caption(
+            "Granularità temporale: "
+            f"**{nomi_granularita[granularita]}**"
+        )
+
+
+    # =====================================================
+    # BOTTONE
+    # =====================================================
+
+    esegui = st.button(
+        "Esegui analisi →",
+        type="primary",
+        use_container_width=True
     )
-
-
-
-
-esegui = st.button(
-    "▶️ Esegui analisi",
-    type="primary",
-    use_container_width=True
-)
 
 
 # =========================================================
@@ -242,153 +617,202 @@ top_cache = (
     else None
 )
 
+
 chiave_analisi = (
     st.session_state.versione_filtri,
     tipo_analisi,
-    top_cache
+    top_cache,
+    granularita
 )
 
 
 # =========================================================
-# ESECUZIONE ANALISI
+# ESECUZIONE
 # =========================================================
 
 if esegui:
-
-    crimini = carica_dataset()
-
-
-    # -----------------------------------------------------
-    # AREA GEOGRAFICA
-    # -----------------------------------------------------
-
-    area_attiva = None
-
-    if (
-        st.session_state.area_filtro_attiva
-        and
-        st.session_state.area_disegnata is not None
-    ):
-
-        area_attiva = st.session_state.area_disegnata
-
 
     with st.spinner(
         "Spark sta elaborando l'analisi..."
     ):
 
-        # -------------------------------------------------
-        # FILTRI GLOBALI
-        # -------------------------------------------------
-
-        crimini_filtrati = applica_filtri_globali(
-            crimini,
-            st.session_state.data_inizio,
-            st.session_state.data_fine,
-            st.session_state.tipo_crimine,
-            st.session_state.distretto,
-            st.session_state.arresto,
-            area_attiva
+        crimini_filtrati = (
+            dataframe_per_analisi(
+                tipo_analisi
+            )
         )
 
 
-        # -------------------------------------------------
-        # QUERY
-        # -------------------------------------------------
+        # =================================================
+        # TIPI
+        # =================================================
 
-        if tipo_analisi == "Tipi di crimine più frequenti":
+        if (
+            tipo_analisi
+            == "Tipi di crimine più frequenti"
+        ):
 
             risultato = top_tipi_crimine(
                 crimini_filtrati,
                 top_n
             )
 
-            categoria = "Primary Type"
-
             titolo = (
                 "Tipi di crimine più frequenti"
             )
 
+            categoria = "Primary Type"
+
             tipo_grafico = "bar"
 
 
-        elif tipo_analisi == "Distretti con più crimini":
+        # =================================================
+        # DISTRETTI
+        # =================================================
+
+        elif (
+            tipo_analisi
+            == "Distretti con più crimini"
+        ):
 
             risultato = top_distretti(
                 crimini_filtrati,
                 top_n
             )
 
-            categoria = "District"
-
             titolo = (
                 "Distretti con più crimini"
             )
 
+            categoria = "District"
+
             tipo_grafico = "bar"
 
 
-        elif tipo_analisi == "Distribuzione arresti":
+        # =================================================
+        # ARRESTI
+        # =================================================
+
+        elif (
+            tipo_analisi
+            == "Distribuzione arresti"
+        ):
 
             risultato = distribuzione_arresti(
                 crimini_filtrati
             )
 
-            categoria = "Arrest"
+            titolo = (
+                "Distribuzione degli arresti"
+            )
 
-            titolo = "Distribuzione degli arresti"
+            categoria = "Arrest"
 
             tipo_grafico = "bar"
 
 
-        elif tipo_analisi == "Luoghi più frequenti":
+        # =================================================
+        # LUOGHI
+        # =================================================
+
+        elif (
+            tipo_analisi
+            == "Luoghi più frequenti"
+        ):
 
             risultato = top_luoghi(
                 crimini_filtrati,
                 top_n
             )
 
-            categoria = "Location Description"
+            titolo = (
+                "Luoghi più frequenti"
+            )
 
-            titolo = "Luoghi più frequenti"
+            categoria = "Location Description"
 
             tipo_grafico = "bar"
 
 
-        elif tipo_analisi == "Andamento annuale":
+        # =================================================
+        # ANDAMENTO TEMPORALE
+        # =================================================
 
-            risultato = andamento_annuale(
-                crimini_filtrati
+        elif (
+            tipo_analisi
+            == "Andamento nel tempo"
+        ):
+
+            risultato = andamento_temporale(
+                crimini_filtrati,
+                granularita
             )
 
-            categoria = "Year"
+            titolo = (
+                "Andamento dei crimini nel tempo"
+            )
 
-            titolo = "Andamento annuale dei crimini"
+            categoria = "Periodo"
 
             tipo_grafico = "line"
 
+
+        # =================================================
+        # GIORNO SETTIMANA
+        # =================================================
+
+        elif (
+            tipo_analisi
+            == "Crimini per giorno della settimana"
+        ):
+
+            risultato = (
+                crimini_per_giorno_settimana(
+                    crimini_filtrati
+                )
+            )
+
+            titolo = (
+                "Crimini per giorno della settimana"
+            )
+
+            categoria = "Giorno"
+
+            tipo_grafico = "bar"
+
+
+        # =================================================
+        # FASCIA ORARIA
+        # =================================================
 
         else:
 
-            risultato = andamento_mensile(
-                crimini_filtrati
+            risultato = (
+                crimini_per_fascia_oraria(
+                    crimini_filtrati
+                )
             )
 
-            categoria = "Mese"
+            titolo = (
+                "Crimini per fascia oraria"
+            )
 
-            titolo = "Andamento mensile dei crimini"
+            categoria = "Fascia"
 
-            tipo_grafico = "line"
+            tipo_grafico = "bar"
 
 
         dati = risultato.toPandas()
 
 
     # =====================================================
-    # SISTEMAZIONE ETICHETTE
+    # SISTEMAZIONE DATI
     # =====================================================
 
-    if tipo_analisi == "Distribuzione arresti":
+    if (
+        tipo_analisi
+        == "Distribuzione arresti"
+    ):
 
         dati["Arrest"] = dati["Arrest"].map(
             {
@@ -398,52 +822,88 @@ if esegui:
         )
 
 
-    if tipo_analisi == "Andamento mensile":
+    elif (
+        tipo_analisi
+        == "Andamento nel tempo"
+    ):
 
-        mesi = {
-            1: "Gen",
-            2: "Feb",
-            3: "Mar",
-            4: "Apr",
-            5: "Mag",
-            6: "Giu",
-            7: "Lug",
-            8: "Ago",
-            9: "Set",
-            10: "Ott",
-            11: "Nov",
-            12: "Dic"
-        }
-
-        dati["MeseNome"] = dati["Mese"].map(
-            mesi
+        dati["Periodo"] = (
+            dati["Periodo"]
+            .astype(str)
         )
 
-        categoria_grafico = "MeseNome"
 
-    else:
+    elif (
+        tipo_analisi
+        == "Crimini per giorno della settimana"
+    ):
 
-        categoria_grafico = categoria
+        nomi_giorni = {
+            1: "Domenica",
+            2: "Lunedì",
+            3: "Martedì",
+            4: "Mercoledì",
+            5: "Giovedì",
+            6: "Venerdì",
+            7: "Sabato"
+        }
+
+
+        dati["Giorno"] = (
+            dati["GiornoNumero"]
+            .map(
+                nomi_giorni
+            )
+        )
+
+
+        dati = dati[
+            [
+                "Giorno",
+                "count"
+            ]
+        ]
+
+
+    elif (
+        tipo_analisi
+        == "Crimini per fascia oraria"
+    ):
+
+        dati = dati[
+            [
+                "Fascia",
+                "count"
+            ]
+        ]
 
 
     # =====================================================
-    # SALVATAGGIO CACHE
+    # CACHE
     # =====================================================
 
     st.session_state.cache_analisi_chiave = (
         chiave_analisi
     )
 
-    st.session_state.cache_analisi_dati = dati
+    st.session_state.cache_analisi_dati = (
+        dati
+    )
 
-    st.session_state.cache_analisi_titolo = titolo
+    st.session_state.cache_analisi_titolo = (
+        titolo
+    )
 
     st.session_state.cache_analisi_categoria = (
-        categoria_grafico
+        categoria
     )
 
     st.session_state.cache_analisi_grafico = (
         tipo_grafico
+    )
+
+    st.session_state.cache_analisi_granularita = (
+        granularita
     )
 
 
@@ -453,7 +913,8 @@ if esegui:
 
 cache_valida = (
     st.session_state.cache_analisi_chiave
-    == chiave_analisi
+    ==
+    chiave_analisi
     and
     st.session_state.cache_analisi_dati
     is not None
@@ -470,11 +931,15 @@ if not cache_valida:
     st.stop()
 
 
-dati = st.session_state.cache_analisi_dati
+dati = (
+    st.session_state.cache_analisi_dati
+)
 
-titolo = st.session_state.cache_analisi_titolo
+titolo = (
+    st.session_state.cache_analisi_titolo
+)
 
-categoria_grafico = (
+categoria = (
     st.session_state.cache_analisi_categoria
 )
 
@@ -489,8 +954,20 @@ tipo_grafico = (
 
 st.divider()
 
-st.subheader(titolo)
 
+st.markdown(
+    """
+    <div class="crime-section-label">
+        ◫ Result
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+
+st.markdown(
+    f"## {titolo}"
+)
 
 if dati.empty:
 
@@ -503,7 +980,7 @@ if dati.empty:
 
 
 # =========================================================
-# METRICHE
+# METRICHE RISULTATO
 # =========================================================
 
 totale_rappresentato = int(
@@ -511,81 +988,97 @@ totale_rappresentato = int(
 )
 
 
-col1, col2 = st.columns(2)
-
-
-col1.metric(
-    "Elementi restituiti",
-    len(dati)
+indice_picco = (
+    dati["count"].idxmax()
 )
 
 
-col2.metric(
-    "Crimini rappresentati",
-    f"{totale_rappresentato:,}"
+categoria_picco = str(
+    dati.loc[
+        indice_picco,
+        categoria
+    ]
 )
 
+
+valore_picco = int(
+    dati.loc[
+        indice_picco,
+        "count"
+    ]
+)
+
+
+# =========================================================
+# METRICHE RISULTATO
+# =========================================================
+
+col1, col2, col3 = st.columns(3)
+
+
+with col1:
+
+    st.metric(
+        "Eventi rappresentati",
+        f"{totale_rappresentato:,}"
+    )
+
+
+with col2:
+
+    st.metric(
+        "Categorie",
+        f"{len(dati):,}"
+    )
+
+
+with col3:
+
+    st.metric(
+        "Valore principale",
+        categoria_picco
+    )
+
+    st.caption(
+        f"{valore_picco:,} eventi"
+    )
 
 # =========================================================
 # GRAFICO
 # =========================================================
 
-st.markdown("### 📈 Visualizzazione")
 
+st.markdown(
+    "### Visualizzazione"
+)
+
+
+# =========================================================
+# ANDAMENTO NEL TEMPO -> LINEA
+# =========================================================
 
 if tipo_grafico == "line":
-
-    # -----------------------------------------------------
-    # ANDAMENTO MENSILE
-    # -----------------------------------------------------
-
-    if tipo_analisi == "Andamento mensile":
-
-        ordine_mesi = [
-            "Gen",
-            "Feb",
-            "Mar",
-            "Apr",
-            "Mag",
-            "Giu",
-            "Lug",
-            "Ago",
-            "Set",
-            "Ott",
-            "Nov",
-            "Dic"
-        ]
-
-        asse_x = alt.X(
-            "MeseNome:N",
-            title="Mese",
-            sort=ordine_mesi
-        )
-
-
-    # -----------------------------------------------------
-    # ANDAMENTO ANNUALE
-    # -----------------------------------------------------
-
-    else:
-
-        asse_x = alt.X(
-            "Year:O",
-            title="Anno"
-        )
-
 
     grafico = (
         alt.Chart(dati)
 
         .mark_line(
-            point=True,
+            color="#38BDF8",
+            point={
+                "filled": True,
+                "fill": "#38BDF8",
+                "size": 65
+            },
             strokeWidth=3
         )
 
         .encode(
 
-            x=asse_x,
+            x=alt.X(
+                "Periodo:N",
+                title="Periodo",
+                sort=None
+            ),
 
             y=alt.Y(
                 "count:Q",
@@ -594,7 +1087,7 @@ if tipo_grafico == "line":
 
             tooltip=[
                 alt.Tooltip(
-                    f"{categoria_grafico}:N",
+                    "Periodo:N",
                     title="Periodo"
                 ),
 
@@ -607,19 +1100,81 @@ if tipo_grafico == "line":
         )
 
         .properties(
-            height=450
+            height=420
         )
     )
 
 
-else:
+# =========================================================
+# DISTRETTI -> BARRE VERTICALI
+# =========================================================
+
+elif tipo_analisi == "Distretti con più crimini":
 
     grafico = (
         alt.Chart(dati)
 
         .mark_bar(
-            cornerRadiusTopRight=5,
-            cornerRadiusBottomRight=5
+            color="#3B82F6",
+            cornerRadiusTopLeft=6,
+            cornerRadiusTopRight=6
+        )
+
+        .encode(
+
+            x=alt.X(
+                "District:N",
+                title="Distretto",
+                sort="-y",
+                axis=alt.Axis(
+                    labelAngle=0
+                )
+            ),
+
+            y=alt.Y(
+                "count:Q",
+                title="Numero di crimini"
+            ),
+
+            tooltip=[
+                alt.Tooltip(
+                    "District:N",
+                    title="Distretto"
+                ),
+
+                alt.Tooltip(
+                    "count:Q",
+                    title="Crimini",
+                    format=","
+                )
+            ]
+        )
+
+        .properties(
+            height=400
+        )
+    )
+
+
+# =========================================================
+# ARRESTI -> BARRE VERTICALI
+# =========================================================
+
+elif tipo_analisi == "Distribuzione arresti":
+
+    ordine_arresti = [
+        "Nessun arresto",
+        "Arresto effettuato"
+    ]
+
+    grafico = (
+        alt.Chart(dati)
+
+        .mark_bar(
+            color="#8B5CF6",
+            size=42,
+            cornerRadiusTopRight=7,
+            cornerRadiusBottomRight=7
         )
 
         .encode(
@@ -630,14 +1185,186 @@ else:
             ),
 
             y=alt.Y(
-                f"{categoria_grafico}:N",
-                sort="-x",
-                title=None
+                "Arrest:N",
+                title=None,
+                sort=ordine_arresti,
+                axis=alt.Axis(
+                    labelLimit=220
+                )
             ),
 
             tooltip=[
                 alt.Tooltip(
-                    f"{categoria_grafico}:N",
+                    "Arrest:N",
+                    title="Stato"
+                ),
+                alt.Tooltip(
+                    "count:Q",
+                    title="Crimini",
+                    format=","
+                )
+            ]
+        )
+
+        .properties(
+            height=180
+        )
+    )
+
+# =========================================================
+# GIORNI DELLA SETTIMANA -> BARRE VERTICALI
+# =========================================================
+
+elif tipo_analisi == "Crimini per giorno della settimana":
+
+    ordine_giorni = [
+        "Lunedì",
+        "Martedì",
+        "Mercoledì",
+        "Giovedì",
+        "Venerdì",
+        "Sabato",
+        "Domenica"
+    ]
+
+    grafico = (
+        alt.Chart(dati)
+
+        .mark_bar(
+            color="#38BDF8",
+            cornerRadiusTopLeft=6,
+            cornerRadiusTopRight=6
+        )
+
+        .encode(
+
+            x=alt.X(
+                "Giorno:N",
+                title=None,
+                sort=ordine_giorni,
+                axis=alt.Axis(
+                    labelAngle=0
+                )
+            ),
+
+            y=alt.Y(
+                "count:Q",
+                title="Numero di crimini"
+            ),
+
+            tooltip=[
+                alt.Tooltip(
+                    "Giorno:N",
+                    title="Giorno"
+                ),
+
+                alt.Tooltip(
+                    "count:Q",
+                    title="Crimini",
+                    format=","
+                )
+            ]
+        )
+
+        .properties(
+            height=380
+        )
+    )
+
+
+# =========================================================
+# FASCE ORARIE -> BARRE VERTICALI
+# =========================================================
+
+elif tipo_analisi == "Crimini per fascia oraria":
+
+    ordine_fasce = [
+        "00:00 - 05:59",
+        "06:00 - 11:59",
+        "12:00 - 17:59",
+        "18:00 - 23:59"
+    ]
+
+    grafico = (
+        alt.Chart(dati)
+
+        .mark_bar(
+            color="#8B5CF6",
+            cornerRadiusTopLeft=6,
+            cornerRadiusTopRight=6
+        )
+
+        .encode(
+
+            x=alt.X(
+                "Fascia:N",
+                title="Fascia oraria",
+                sort=ordine_fasce,
+                axis=alt.Axis(
+                    labelAngle=0
+                )
+            ),
+
+            y=alt.Y(
+                "count:Q",
+                title="Numero di crimini"
+            ),
+
+            tooltip=[
+                alt.Tooltip(
+                    "Fascia:N",
+                    title="Fascia"
+                ),
+
+                alt.Tooltip(
+                    "count:Q",
+                    title="Crimini",
+                    format=","
+                )
+            ]
+        )
+
+        .properties(
+            height=380
+        )
+    )
+
+
+# =========================================================
+# TIPI / LUOGHI -> BARRE ORIZZONTALI
+# =========================================================
+
+else:
+
+    grafico = (
+        alt.Chart(dati)
+
+        .mark_bar(
+            color="#3B82F6",
+            cornerRadiusTopRight=6,
+            cornerRadiusBottomRight=6
+        )
+
+        .encode(
+
+            x=alt.X(
+                "count:Q",
+                title="Numero di crimini"
+            ),
+
+            y=alt.Y(
+                f"{categoria}:N",
+                sort="-x",
+                title=None,
+
+                axis=alt.Axis(
+                    labelLimit=0
+                )
+            ),
+
+            tooltip=[
+                alt.Tooltip(
+                    f"{categoria}:N",
                     title="Categoria"
                 ),
 
@@ -654,18 +1381,33 @@ else:
         )
     )
 
+# =========================================================
+# STILE GRAFICO
+# =========================================================
+
+grafico = applica_stile_grafico(
+    grafico
+)
+
+
+# =========================================================
+# VISUALIZZAZIONE
+# =========================================================
+
 
 st.altair_chart(
     grafico,
     use_container_width=True
 )
 
-
 # =========================================================
 # TABELLA
 # =========================================================
 
-st.markdown("### 📋 Dati")
+st.markdown(
+    "### ▤ Dati"
+)
+
 
 st.dataframe(
     dati,
