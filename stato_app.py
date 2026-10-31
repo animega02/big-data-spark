@@ -5,6 +5,18 @@ import streamlit as st
 from persistenza import carica_filtri
 
 
+DATA_MINIMA = date(2001, 1, 1)
+
+def data_massima():
+    """Limite superiore dinamico: la data corrente."""
+    return date.today()
+
+
+def limita_data(valore):
+    """Mantiene una data dentro l'intervallo 01/01/2001 - oggi."""
+    return max(DATA_MINIMA, min(valore, data_massima()))
+
+
 def inizializza_stato():
 
     # =====================================================
@@ -52,13 +64,13 @@ def inizializza_stato():
 
             try:
 
-                st.session_state.data_inizio = (
+                st.session_state.data_inizio = limita_data(
                     date.fromisoformat(
                         salvati["data_inizio"]
                     )
                 )
 
-                st.session_state.data_fine = (
+                st.session_state.data_fine = limita_data(
                     date.fromisoformat(
                         salvati["data_fine"]
                     )
@@ -85,18 +97,10 @@ def inizializza_stato():
                     )
                 )
 
-                st.session_state.area_disegnata = (
-                    salvati.get(
-                        "area_disegnata"
-                    )
-                )
-
-                st.session_state.area_filtro_attiva = (
-                    salvati.get(
-                        "area_filtro_attiva",
-                        False
-                    )
-                )
+                # L'area geografica NON viene caricata dal disco.
+                # Deve vivere solo nella sessione Streamlit corrente:
+                # resta disponibile passando da una pagina all'altra,
+                # ma una nuova sessione parte sempre senza rettangolo.
 
                 st.session_state.filtri_applicati = (
                     salvati.get(
@@ -113,5 +117,9 @@ def inizializza_stato():
 
                 pass
 
+
+        # Garantisce sempre un intervallo cronologico valido.
+        if st.session_state.data_inizio > st.session_state.data_fine:
+            st.session_state.data_inizio = st.session_state.data_fine
 
         st.session_state._stato_persistente_caricato = True

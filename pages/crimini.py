@@ -108,7 +108,8 @@ st.markdown(
 
 
 with st.container(
-    border=True
+    border=True,
+    key="panel-cyan-ricerca"
 ):
 
     col_ricerca, col_limite = st.columns(

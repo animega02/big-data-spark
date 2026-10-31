@@ -1,0 +1,38 @@
+[theme]
+base = "dark"
+
+primaryColor = "#00F0FF"
+backgroundColor = "#05060D"
+secondaryBackgroundColor = "#0A0E1A"
+textColor = "#E8F1FF"
+
+borderColor = "#1B3A52"
+
+dataframeHeaderBackgroundColor = "#0E1424"
+dataframeBorderColor = "#12304A"
+
+
+[theme.light]
+
+primaryColor = "#00F0FF"
+backgroundColor = "#05060D"
+secondaryBackgroundColor = "#0A0E1A"
+textColor = "#E8F1FF"
+
+borderColor = "#1B3A52"
+
+dataframeHeaderBackgroundColor = "#0E1424"
+dataframeBorderColor = "#12304A"
+
+
+[theme.dark]
+
+primaryColor = "#00F0FF"
+backgroundColor = "#05060D"
+secondaryBackgroundColor = "#0A0E1A"
+textColor = "#E8F1FF"
+
+borderColor = "#1B3A52"
+
+dataframeHeaderBackgroundColor = "#0E1424"
+dataframeBorderColor = "#12304A"

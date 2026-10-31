@@ -18,9 +18,9 @@ def salva_filtri(stato):
         "distretto": stato.distretto,
         "arresto": stato.arresto,
 
-        "area_disegnata": stato.area_disegnata,
-        "area_filtro_attiva": stato.area_filtro_attiva,
-
+        # L'area disegnata non viene persistita su disco.
+        # Rimane in st.session_state durante la navigazione della
+        # sessione corrente, ma non ricompare al successivo avvio.
         "filtri_applicati": stato.filtri_applicati
     }
 

@@ -488,7 +488,8 @@ st.markdown("## Costruisci l'analisi")
 
 
 with st.container(
-    border=True
+    border=True,
+    key="panel-cyan-analisi"
 ):
 
     col_analisi, col_top = st.columns(
@@ -1063,10 +1064,10 @@ if tipo_grafico == "line":
         alt.Chart(dati)
 
         .mark_line(
-            color="#38BDF8",
+            color="#00F0FF",
             point={
                 "filled": True,
-                "fill": "#38BDF8",
+                "fill": "#00F0FF",
                 "size": 65
             },
             strokeWidth=3
@@ -1115,7 +1116,7 @@ elif tipo_analisi == "Distretti con più crimini":
         alt.Chart(dati)
 
         .mark_bar(
-            color="#3B82F6",
+            color="#7B5CFF",
             cornerRadiusTopLeft=6,
             cornerRadiusTopRight=6
         )
@@ -1171,7 +1172,7 @@ elif tipo_analisi == "Distribuzione arresti":
         alt.Chart(dati)
 
         .mark_bar(
-            color="#8B5CF6",
+            color="#FF2BD6",
             size=42,
             cornerRadiusTopRight=7,
             cornerRadiusBottomRight=7
@@ -1231,7 +1232,7 @@ elif tipo_analisi == "Crimini per giorno della settimana":
         alt.Chart(dati)
 
         .mark_bar(
-            color="#38BDF8",
+            color="#00F0FF",
             cornerRadiusTopLeft=6,
             cornerRadiusTopRight=6
         )
@@ -1289,7 +1290,7 @@ elif tipo_analisi == "Crimini per fascia oraria":
         alt.Chart(dati)
 
         .mark_bar(
-            color="#8B5CF6",
+            color="#FF2BD6",
             cornerRadiusTopLeft=6,
             cornerRadiusTopRight=6
         )
@@ -1340,7 +1341,7 @@ else:
         alt.Chart(dati)
 
         .mark_bar(
-            color="#3B82F6",
+            color="#7B5CFF",
             cornerRadiusTopRight=6,
             cornerRadiusBottomRight=6
         )
